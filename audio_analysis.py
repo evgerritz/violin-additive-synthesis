@@ -11,9 +11,7 @@ samplerate, samples = wavfile.read('./string_vln.b3.wav')
 def get_freq(freq):
     num_samples = samplerate/10
     f, t, Pxx = signal.spectrogram(samples,samplerate,signal.get_window('hamming',int(num_samples)))
-    print(f)
     frequency_index = math.floor(freq/10) + 1
-    print(f[frequency_index])
     return Pxx[frequency_index + 1,:]
 
 
