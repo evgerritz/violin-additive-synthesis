@@ -1,11 +1,3 @@
-/*
-* TODO:
-1. modulate overall partial amps (g3_p_amps and b3_p_amps) proportionally with amp parameter (louder amp => more weighting of higher partials)
-2. think about vibrato settings, varying with total duration
-3. add comments to audio_analysis.py
-4. blog post
-*/
-
 (
 // getEnv returns the amplitude envelope for the given partial with a specified duration
 // values were obtained using the get_envs function in audio_analysis.py
@@ -80,6 +72,9 @@
 		)
 	});
 
+	// note not using Done because each partial's envelope has doneAction: 2, meaning the synth gets freed
+	// when the envelope ends (this is equivalent to freeing the synth, as the synth count in the bottom
+	// right goes from 1s to 0s when the play call is over)
 	Out.ar(0, // output to the first bus
 		overall_env * Pan2.ar( // pan and wrap in overall envelope
 			Mix.ar(violin), // combine the array of partials into one audio stream
