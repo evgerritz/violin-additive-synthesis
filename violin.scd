@@ -41,10 +41,15 @@
 	var b3_p_amps = [-19.677681.dbamp, -16.068069.dbamp, -24.365194.dbamp, -29.162367.dbamp, -22.563808.dbamp, -24.685932.dbamp, -23.103920.dbamp, -34.609348.dbamp, -39.673325.dbamp, -36.955822.dbamp, -43.593620.dbamp, -42.416943.dbamp, -44.805397.dbamp, -44.260376.dbamp, -53.416824.dbamp, -45.508774.dbamp, -49.013474.dbamp, -49.588352.dbamp, -58.833996.dbamp, -63.190372.dbamp, -60.234680.dbamp, -69.192421.dbamp, -60.320347.dbamp, -60.340473.dbamp, -66.070541.dbamp, -73.828949.dbamp, -73.772057.dbamp, -76.432671.dbamp, -78.956154.dbamp, -77.941963.dbamp];
 	var num_partials = g3_p_amps.size;
 
-	var loud_timbrel_shift = [-2.28157.dbamp, -3.54421.dbamp, -3.49454.dbamp, -3.38472.dbamp, -2.49817.dbamp, -0.98472.dbamp, 1.4721.dbamp, 3.68409.dbamp, 7.16875.dbamp, 11.24329.dbamp, 15.94913.dbamp, 21.46562.dbamp, 26.67462.dbamp, 32.67694.dbamp, 38.103.dbamp, 43.26638.dbamp, 48.16752.dbamp, 52.97422.dbamp, 55.90228.dbamp, 60.19878.dbamp, 62.43164.dbamp, 64.45425.dbamp, 65.1454.dbamp, 65.80317.dbamp, 64.46623.dbamp, 62.75787.dbamp, 59.98324.dbamp, 56.46666.dbamp, 52.05956.dbamp, 47.79698.dbamp];
+	// this array approximates the relative change in each partial's energy when
+	// the violin is being played more loudly. The values were obtained (in audio_analysis.py) by doing an FFT
+	// on a quiet and loud segment of a violin recording, subtracting the loud from the soft amplitudes for each partial
+	// and then smoothing and normalizing the values. Qualitatively, the values in the array reflect the idea that
+	// lower partials do not change much at higher volumes, as the additional energy disproportionately affects higher partials
+	var loud_timbrel_shift = [0.01919, 0.0, 0.00075, 0.00242, 0.0159, 0.0389, 0.07623, 0.10985, 0.1628, 0.22472, 0.29624, 0.38007, 0.45923, 0.55045, 0.63291, 0.71137, 0.78585, 0.8589, 0.9034, 0.96869, 1.00262, 1.03336, 1.04386, 1.05386, 1.03354, 1.00758, 0.96542, 0.91198, 0.845, 0.78022];
 
 	// create the overall envelope specified by the user to create the "shape" of the note
-	var overall_env = Env.linen(attackTime, sustainTime, releaseTime, 1.0, \welch).kr();
+	var overall_env = Env.linen(attackTime, sustainTime, releaseTime, amp, \welch).kr();
 	var duration = attackTime + sustainTime + releaseTime;
 
 	// create an array of num_partials SinOscs, with the i-th index corresponding
@@ -62,13 +67,14 @@
 			    (LFNoise1.kr(3, mul:1.5) + // add +/- 1.5Hz of frequency noise 3 times/second
 			    // add vibrato scaled by vibrato argument, wrap in the same envelope as the partial
 			    // to make sure the vibrato is strongest when the partial is loudest
-			    SinOsc.kr(5, mul:0.03*freq*vibrato) * ~getEnv.(i, duration)) +
+			    SinOsc.kr(5, mul:0.04*freq*vibrato*amp) * ~getEnv.(i, duration)) + // also scale by amp
 			    // add some pinknoise to frequency to simulate bow noise
 			    PinkNoise.kr(mul: 10),
 
 			mul: ( ~getEnv.(i, duration) * // multiply everything by STFT-calculated, per-partial envelope
-				( interp_p_amp + // use the interpolated average amplitude
-				  (amp/7000 * loud_timbrel_shift[i]) +
+				( interp_p_amp * // use the interpolated average amplitude
+					( 1 + (5*amp*loud_timbrel_shift[i]) ) + // adding per-partial loudness proportional to amplitude
+					                                       // this allows for timbrel change based on loudness
 			      LFNoise1.kr(5, mul:0.002) + // add some noise
 				  PinkNoise.kr(mul: 0.03) )) // pink noise to simulate bow noise
 		)
@@ -83,7 +89,15 @@
 };
 
 // play a single note
-~noteGen.play(args: [\freq: 247, \vibrato: 0.5, \amp: 1.0]);
+~noteGen.play(args: [
+	\freq: 196,
+	\attackTime: 1.0,
+	\sustainTime: 1.0,
+	\releaseTime: 1.5,
+	\amp: 1.0,
+	\vibrato: 0.5,
+	\pan: 0.0
+]);
 )
 
 
@@ -139,7 +153,7 @@ var odeToJoy = [
 		var rT = duration * 0.3;
 		// use a scheduler based on system clock to make sure notes don't overlap
 		SystemClock.sched(running_time, {
-			~noteGen.play(args: [\freq, note, \attackTime, aT, \sustainTime, sT, \releaseTime, rT, \vibrato, 0.5, \pan, 0.0]);
+			~noteGen.play(args: [\freq, note, \attackTime, aT, \sustainTime, sT, \releaseTime, rT, \vibrato, 0.5, \amp, 0.5, \pan, 0.0]);
 		});
 		running_time = running_time + item[1];
 	})

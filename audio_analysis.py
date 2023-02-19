@@ -15,9 +15,17 @@ def smooth_data(x):
     return np.convolve(x, gaussian_kernel, mode='same')
 
 def get_freq(freq, samplerate, samples, smooth=True):
+    """
+    returns amplitude values over time for the given frequency
+    using a spectrogram/series of STFTs. if smooth is True,
+    will use Gaussian smoothing to remove vibrato/noise from 
+    the amplitudes
+    """
     # good value empirically for maximizing number of freqs and times
-    num_samples = 3020 #samplerate/10
+    num_samples = 3020 
     f, t, Pxx = signal.spectrogram(samples,samplerate,signal.get_window('hamming',int(num_samples)))
+    # find the frequency closest to the target freq at which 
+    # fourier samples were taken
     frequency_index = np.argmin(np.abs(f-freq))
     amps = Pxx[frequency_index,:]
 
@@ -33,6 +41,10 @@ def plot_amp(freq, samplerate, samples, smooth=True):
 
 
 def plot_amps(fund_freq, samplerate, samples, smooth=True):
+    """
+    plot an amplitudes over time graph for every partial 
+    corresponding to the fundamental frequency
+    """
     npartials = 30; nrows = npartials//5; ncols = npartials//6
     fig, axs = plt.subplots(nrows, ncols, figsize=(ncols*8, nrows*8))
     freq = fund_freq
@@ -41,7 +53,7 @@ def plot_amps(fund_freq, samplerate, samples, smooth=True):
             ax = axs[i,j]
             ax.set_ylabel('Power')
             ax.set_xlabel('Time [sec]')
-            ax.set_title('Partial no: ' + str(i*ncols+j+1) + ' (' + str(freq) + ' Hz' + ')')
+            ax.set_title('Partial #' + str(i*ncols+j+1) + ' for g3' + ' (' + str(freq) + ' Hz' + ')')
             ax.plot(*get_freq(freq, samplerate, samples, smooth))
             freq += fund_freq
 
@@ -107,24 +119,26 @@ def timbrel_change(smooth = True, print_out = False):
     plt.show()
 
     if print_out:
-        print_array(diff)
+        # print normalized values for use in supercollider
+        print_array((diff + abs(np.min(diff)))/np.max(diff))
 
 
 
 
 if __name__ == '__main__':
     # uncomment these lines to plot/get envelope data for the b3 violin file
-    samplerate, samples = wavfile.read('./string_vln.b3.wav')
-    b3 = 247
-    plot_amps(b3, samplerate, samples, smooth=False)
-    get_envs(b3, samplerate, samples)
+    #samplerate, samples = wavfile.read('./string_vln.b3.wav')
+    #b3 = 247
+    #plot_amps(b3, samplerate, samples, smooth=False)
+    #get_envs(b3, samplerate, samples)
 
     # uncomment these lines to plot/get envelope data for the g3 violin file
-    #samplerate, samples = wavfile.read('./string_vln.g3.wav')
-    #g3 = 196
-    #plot_amps(g3, samplerate, samples, smooth=False)
-    #get_envs(g3, samplerate, samples, smooth=True)
+    samplerate, samples = wavfile.read('./string_vln.g3.wav')
+    g3 = 196
+    plot_amps(g3, samplerate, samples, smooth=False)
+    plot_amps(g3, samplerate, samples, smooth=True)
+    get_envs(g3, samplerate, samples, smooth=True)
 
     # uncomment these lines to plot timbrel change for two amplitudes
-    #timbrel_change(smooth=False)
-    #timbrel_change(print_out=True)
+    timbrel_change(smooth=False)
+    timbrel_change(print_out=True)
