@@ -1,11 +1,9 @@
 /*
 * TODO:
 1. modulate overall partial amps (g3_p_amps and b3_p_amps) proportionally with amp parameter (louder amp => more weighting of higher partials)
-2. mess with bow noise, add amplitude/freq variation via LFNoise1
-3. think about vibrato settings, varying with total duration
-4. save mp3s
-5. add comments to violin.scd (noteGen), audio_analysis.py
-6. blog post
+2. think about vibrato settings, varying with total duration
+3. add comments to audio_analysis.py
+4. blog post
 */
 
 (
@@ -31,29 +29,58 @@
 // to an internally created linen envelope: attackTime, sustainTime, releaseTime, amp
 // to synthesize a 3 second note, the sum of these times just needs to be 3
 // the vibrato argument takes in a value from 0,1 to add no vibrato (0) or a lot of vibrato (1)
-~noteGen = {|freq=196, attackTime=0.55, sustainTime=2.05, releaseTime=0.4, amp=1.0, vibrato=0.5, pan=0.0|
+~noteGen = {|freq=196, attackTime=1.0, sustainTime=1.0, releaseTime=1.5, amp=1.0, vibrato=0.5, pan=0.0|
+	// average amplitude for each partial given for the following two fundamental frequencies
+	// for the ith partial, we will linearly interpolate between the i-th values in the
+	// g3 and b3 partial amplitudes arrays
 	var g3 = 196.0;
 	var b3 = 246.94;
+	// these values were provided
 	var g3_p_amps = [-32.4.dbamp, -9.5.dbamp, -20.8.dbamp, -20.3.dbamp, -19.2.dbamp, -20.9.dbamp, -26.1.dbamp, -27.2.dbamp, -23.9.dbamp, -22.1.dbamp, -31.1.dbamp, -34.1.dbamp, -28.2.dbamp, -31.6.dbamp, -37.8.dbamp, -35.9.dbamp, -30.5.dbamp, -30.9.dbamp, -31.2.dbamp, -53.6.dbamp, -53.2.dbamp, -50.2.dbamp, -46.8.dbamp, -54.2.dbamp, -49.3.dbamp, -51.0.dbamp, -72.1.dbamp, -56.0.dbamp, -52.9.dbamp, -56.9.dbamp];
+	// these values were obtained by exporting Audacity's fourier transform analysis of the string_vln.b3.wav file
 	var b3_p_amps = [-19.677681.dbamp, -16.068069.dbamp, -24.365194.dbamp, -29.162367.dbamp, -22.563808.dbamp, -24.685932.dbamp, -23.103920.dbamp, -34.609348.dbamp, -39.673325.dbamp, -36.955822.dbamp, -43.593620.dbamp, -42.416943.dbamp, -44.805397.dbamp, -44.260376.dbamp, -53.416824.dbamp, -45.508774.dbamp, -49.013474.dbamp, -49.588352.dbamp, -58.833996.dbamp, -63.190372.dbamp, -60.234680.dbamp, -69.192421.dbamp, -60.320347.dbamp, -60.340473.dbamp, -66.070541.dbamp, -73.828949.dbamp, -73.772057.dbamp, -76.432671.dbamp, -78.956154.dbamp, -77.941963.dbamp];
-
 	var num_partials = g3_p_amps.size;
-	var overall_env = Env.linen(attackTime, sustainTime, releaseTime, amp, \welch).kr();
 
+	// create the overall envelope specified by the user to create the "shape" of the note
+	var overall_env = Env.linen(attackTime, sustainTime, releaseTime, amp, \welch).kr();
 	var duration = attackTime + sustainTime + releaseTime;
 
+	// create an array of num_partials SinOscs, with the i-th index corresponding
+	// to the (i+1)-th partial
 	var violin = Array.fill(num_partials, {|i|
+		// interpolate between the g3 and b3 partial amplitudes
+		// using a similar method as mapValues on hw2 clipping interpolated
+		// values for frequencies not between g3 and b3
 		var g3_p_a = g3_p_amps[i], b3_p_a = b3_p_amps[i];
 		var inLo = g3, inHi = b3, outLo = g3_p_a.min(b3_p_a), outHi = g3_p_a.max(b3_p_a);
 		var interp_p_amp = ((freq-inLo)/(inHi-inLo)*(outHi-outLo)+outLo).clip(outLo, outHi);
 		p = i+1;
-		SinOsc.ar(p*freq + SinOsc.kr(5, mul:0.05*freq*vibrato) + (PinkNoise.kr(mul: 0.01)),
-			mul: interp_p_amp * ~getEnv.(i, duration))
+		SinOsc.ar(
+			freq: p*freq + // this is the true frequency of the partial
+			    (LFNoise1.kr(3, mul:1.5) + // add +/- 1.5Hz of frequency noise 3 times/second
+			    // add vibrato scaled by vibrato argument, wrap in the same envelope as the partial
+			    // to make sure the vibrato is strongest when the partial is loudest
+			    SinOsc.kr(5, mul:0.03*freq*vibrato) * ~getEnv.(i, duration)) +
+			    // add some pinknoise to frequency to simulate bow noise
+			    PinkNoise.kr(mul: 10),
+
+			mul: ( ~getEnv.(i, duration) * // multiply everything by STFT-calculated, per-partial envelope
+				( interp_p_amp + // use the interpolated average amplitude
+			      LFNoise1.kr(5, mul:0.002) + // add some noise
+				  PinkNoise.kr(mul: 0.03) )) // pink noise to simulate bow noise
+		)
 	});
-	Out.ar(0, overall_env * Pan2.ar(Mix.ar(violin), pos:pan))
+
+	Out.ar(0, // output to the first bus
+		overall_env * Pan2.ar( // pan and wrap in overall envelope
+			Mix.ar(violin), // combine the array of partials into one audio stream
+			pos:pan // pan according to user-supplied argument
+		)
+	)
 };
 
-~noteGen.play(args: [\freq: 196, \vibrato: 0.5, \attackTime: 1.0, \sustainTime: 1, \releaseTime: 0.4]);
+// play a single note
+~noteGen.play(args: [\freq: 247, \vibrato: 0.5]);
 )
 
 
@@ -104,18 +131,24 @@ var odeToJoy = [
 		var duration = item[1] * 60.0 / bpm;
 		// may have to fiddle with these parameters to get the violin to sound decent,
 		// especially since they are likely bpm dependent
-		var aT = duration * 0.1;
-		var sT = duration * 0.8;
-		var rT = duration * 0.1;
+		var aT = duration * 0.2;
+		var sT = duration * 0.5;
+		var rT = duration * 0.3;
 		// use a scheduler based on system clock to make sure notes don't overlap
 		SystemClock.sched(running_time, {
-			x = ~noteGen.play(args: [\freq, item, \attackTime, aT, \sustainTime, sT, \releaseTime, rT, \vibrato, 0.5, \pan, 0.0]);
+			~noteGen.play(args: [\freq, note, \attackTime, aT, \sustainTime, sT, \releaseTime, rT, \vibrato, 0.5, \pan, 0.0]);
 		});
-		running_time = running_time + duration - 0.01;
+		running_time = running_time + item[1];
 	})
 };
 
 // view the frequency spectra of the synthesized violin notes
-FreqScope.new;
-~playSong.(odeToJoy, 50);
+// FreqScope.new;
+~playSong.(odeToJoy, 60);
 )
+
+s.prepareForRecord;
+
+s.record;
+
+s.stopRecording;
