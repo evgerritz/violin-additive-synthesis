@@ -41,8 +41,10 @@
 	var b3_p_amps = [-19.677681.dbamp, -16.068069.dbamp, -24.365194.dbamp, -29.162367.dbamp, -22.563808.dbamp, -24.685932.dbamp, -23.103920.dbamp, -34.609348.dbamp, -39.673325.dbamp, -36.955822.dbamp, -43.593620.dbamp, -42.416943.dbamp, -44.805397.dbamp, -44.260376.dbamp, -53.416824.dbamp, -45.508774.dbamp, -49.013474.dbamp, -49.588352.dbamp, -58.833996.dbamp, -63.190372.dbamp, -60.234680.dbamp, -69.192421.dbamp, -60.320347.dbamp, -60.340473.dbamp, -66.070541.dbamp, -73.828949.dbamp, -73.772057.dbamp, -76.432671.dbamp, -78.956154.dbamp, -77.941963.dbamp];
 	var num_partials = g3_p_amps.size;
 
+	var loud_timbrel_shift = [-2.28157.dbamp, -3.54421.dbamp, -3.49454.dbamp, -3.38472.dbamp, -2.49817.dbamp, -0.98472.dbamp, 1.4721.dbamp, 3.68409.dbamp, 7.16875.dbamp, 11.24329.dbamp, 15.94913.dbamp, 21.46562.dbamp, 26.67462.dbamp, 32.67694.dbamp, 38.103.dbamp, 43.26638.dbamp, 48.16752.dbamp, 52.97422.dbamp, 55.90228.dbamp, 60.19878.dbamp, 62.43164.dbamp, 64.45425.dbamp, 65.1454.dbamp, 65.80317.dbamp, 64.46623.dbamp, 62.75787.dbamp, 59.98324.dbamp, 56.46666.dbamp, 52.05956.dbamp, 47.79698.dbamp];
+
 	// create the overall envelope specified by the user to create the "shape" of the note
-	var overall_env = Env.linen(attackTime, sustainTime, releaseTime, amp, \welch).kr();
+	var overall_env = Env.linen(attackTime, sustainTime, releaseTime, 1.0, \welch).kr();
 	var duration = attackTime + sustainTime + releaseTime;
 
 	// create an array of num_partials SinOscs, with the i-th index corresponding
@@ -66,6 +68,7 @@
 
 			mul: ( ~getEnv.(i, duration) * // multiply everything by STFT-calculated, per-partial envelope
 				( interp_p_amp + // use the interpolated average amplitude
+				  (amp/7000 * loud_timbrel_shift[i]) +
 			      LFNoise1.kr(5, mul:0.002) + // add some noise
 				  PinkNoise.kr(mul: 0.03) )) // pink noise to simulate bow noise
 		)
@@ -80,7 +83,7 @@
 };
 
 // play a single note
-~noteGen.play(args: [\freq: 247, \vibrato: 0.5]);
+~noteGen.play(args: [\freq: 247, \vibrato: 0.5, \amp: 1.0]);
 )
 
 
